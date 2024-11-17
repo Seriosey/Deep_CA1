@@ -104,6 +104,7 @@ print('Successfuly created neuron models for all types')
 # plot(M.t/ms, M.v[0])
 # plt.show()
 
+# need to change ca1 ec3 parameters for mec lec
 ca1params = {
             "name": "ca1pyr",
             "R": 0.2,
@@ -280,7 +281,7 @@ import pickle
 from pprint import pprint
 
 
-neurons_list = []  # Necessary for net neurons
+neurons_list = []  
 with (open("presimulation_files/neurons.pickle", "rb")) as openfile:
     while True:
         try:
@@ -316,7 +317,7 @@ neurons = []
 for neuron in neurons_list:
     type = neuron['type']
     types.add(type)
-    if type == 'CA1 Basket CCK+': continue
+    # if type == 'CA1 Basket CCK+': continue
     neurons.append({'type' : type, 
                     'neuron' : NeuronTypes[type]})
     if (type == 'ca3_generator') or (type == 'lec_generator') or (type == 'mec_generator'):
@@ -330,7 +331,7 @@ ready_neurons = [neuron['neuron'] for neuron in neurons]
 
 # net = Network(collect())
 
-'''
+#'''
 for connection in synapses:
 
     if connection['pre_idx'] >= len(neurons) or connection['post_idx'] >= len(neurons): continue
@@ -363,7 +364,7 @@ for connection in synapses:
             ready_synapses.append(S)
             
             print(f'Pre neuron of type {pre_type} and post neuron of type {post_type} are connected...')
-'''
+#'''
 print('All neurons within CA1 are connected')
 
 # example_list = [NeuronTypes['CA1 Pyramidal'], NeuronTypes['CA1 Bistratified']]
@@ -371,11 +372,7 @@ print('All neurons within CA1 are connected')
 # 
 
 
-
-# for neuron in neurons:
-#     net.add(neuron['neuron'])
-
-# net.add(ready_neurons)
+net.add(ready_neurons)
 
 
 
@@ -400,30 +397,30 @@ print('All neurons within CA1 are connected')
 
 
 # Adding a input from generators for every neuron in net
-# for neuron in neurons:
-#     type = neuron['type']
-#     for generator in ["EC LIII Pyramidal", 'CA3 Pyramidal']:
-#         synapse = synapse_types[(synapse_types['Presynaptic Neuron Type'] == generator) & (synapse_types['Postsynaptic Neuron Type'] == neuron['type'])]
+for neuron in neurons:
+    type = neuron['type']
+    for generator in ["EC LIII Pyramidal", 'CA3 Pyramidal']:
+        synapse = synapse_types[(synapse_types['Presynaptic Neuron Type'] == generator) & (synapse_types['Postsynaptic Neuron Type'] == neuron['type'])]
         
-#         if not synapse.empty: # if there is such type in the table:
-#             tau_d, tau_r, tau_f = synapse['tau_d'].iloc[0], synapse['tau_r'].iloc[0], synapse['tau_f'].iloc[0]
-#             A_SE, U_SE = synapse['g'].iloc[0], synapse['u'].iloc[0]
-#             t_delay = synapse['Synaptic Delay'].iloc[0]
-#             conn_prob = 1 #synapse['Connection Probability'].iloc[0]
-#             if generator == "EC LIII Pyramidal":
-#                 print(f'Connecting generator to neuron {type}')
-#                 S = get_synapses(mec, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
-#                 ready_synapses.append(S)
-#                 S = get_synapses(lec, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
-#                 ready_synapses.append(S)
-#             else: 
-#                 S = get_synapses(ca3, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
-#                 ready_synapses.append(S)
-#             print(f'Generator is connected to {type}...')
+        if not synapse.empty: # if there is such type in the table:
+            tau_d, tau_r, tau_f = synapse['tau_d'].iloc[0], synapse['tau_r'].iloc[0], synapse['tau_f'].iloc[0]
+            A_SE, U_SE = synapse['g'].iloc[0], synapse['u'].iloc[0]
+            t_delay = synapse['Synaptic Delay'].iloc[0]
+            conn_prob = 1 #synapse['Connection Probability'].iloc[0]
+            if generator == "EC LIII Pyramidal":
+                print(f'Connecting generator to neuron {type}')
+                S = get_synapses(mec, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
+                ready_synapses.append(S)
+                S = get_synapses(lec, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
+                ready_synapses.append(S)
+            else: 
+                S = get_synapses(ca3, neuron['neuron'], tau_d, tau_r, tau_f, A_SE, U_SE, t_delay, conn_prob)
+                ready_synapses.append(S)
+            print(f'Generator is connected to {type}...')
 
-# net.add(ready_synapses)
+net.add(ready_synapses)
 
-# print('Inputs from generators are added')
+print('Inputs from generators are added')
 
 # for neuron in neurons:
 #     if neuron['type'] == 'CA1 Pyramidal': 
