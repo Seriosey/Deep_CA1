@@ -11,9 +11,13 @@ from scipy.special import i0 as bessel_i0
 from scipy.stats import cauchy
 import time
 from progress.bar import IncrementalBar
+from scipy.ndimage import gaussian_filter1d
+
 from pprint import pprint
 PI = 3.14151728
-FILE_NAME = 'results_default.h5'
+MODE = 'honest'# #'mean' # 
+if MODE == 'honest': FILE_NAME = 'results/results_default_new.h5'
+else: FILE_NAME = 'results_mean.h5'
 
 from np_meanfield import run_mean_field
 from generators import *
@@ -130,12 +134,13 @@ class HonestNetwork:
         w = np.where(fired, w + self.w_jump, w)
 
         rates = np.mean(fired, axis=1)/dt_dim # mean rate per ms
-        gen_rates = np.hstack((inputs[:,0], inputs[:,1]))
+        gen_rates = np.hstack((inputs[:,0], inputs[:,1], inputs[:,2], inputs[:,3])) # , inputs[:,2], inputs[:,3]
 
         full_rates = np.hstack((rates, gen_rates))
         firing_prob = full_rates[:, np.newaxis, np.newaxis] * dt_dim
 
-        
+        # print('input: ', gen_rates.shape)
+        # print('rates: ', full_rates.shape)
         
 
         a_ = A * self.exp_tau_d
@@ -184,7 +189,7 @@ class HonestNetwork:
         return rates
     
 
-    def predict0(self, inputs, initial_states=None, batch_size=1000):
+    def predict0(self, inputs, initial_states=None, batch_size=1000, file4save=FILE_NAME):
 
         num_steps = inputs.shape[1]
 
@@ -196,7 +201,7 @@ class HonestNetwork:
             states = initial_states
 
         # Состояния не возвращаются, а записываются в h5 батчами
-        with h5py.File(FILE_NAME, 'w') as hf:
+        with h5py.File(file4save, 'w') as hf:
 
             hf.create_dataset('v', (num_steps, NN, pop_size), maxshape=(None, NN, pop_size), dtype=np.float32)
             hf.create_dataset('rate', (num_steps, NN+Ninps), maxshape=(None, NN+Ninps), dtype=np.float32)
@@ -258,6 +263,17 @@ if __name__ == '__main__':
             except EOFError:
                 break
 
+    with (open("parameters/params_old.pickle", "rb")) as openfile:
+        while True:
+            try:
+                params_list_old = pickle.load(openfile)
+            except EOFError:
+                break
+
+    # print('old: \n', params_list_old)
+
+    print('new: \n', params_list)
+
 
     types_from_table = {
         0: 'CA1 Pyramidal',
@@ -275,12 +291,28 @@ if __name__ == '__main__':
         12: 'CA1 Trilaminar'
     }
 
+    types_from_table_4 = {
+        0: 'CA1 Axo-Axonic',
+        1: 'CA1 Basket',
+        2: 'CA1 Basket CCK+',
+        3: 'CA1 Bistratified',
+        4: 'CA1 Ivy',
+        5: 'CA1 Neurogliaform',
+        6: 'CA1 O-LM',
+        7: 'CA1 Perforant Path-Associated',
+        8: 'CA1 Interneuron Specific R-O',
+        9: 'CA1 Interneuron Specific RO-O',
+        10: 'CA1 Trilaminar',
+        11: 'CA1 Pyramidal',
+        12: 'CA1 Pyramidal'
+    }
+
 
 
 
     NN = len(params_list['net_params']['I_ext'])
     net_params = params_list['net_params']
-    Ninps = 2
+    Ninps = 4
     pop_size = 2000 # Количество нейронов в каждой популяции
     dt_dim = 0.01  # ms
 
@@ -311,7 +343,7 @@ if __name__ == '__main__':
         izh_params[key] = np.zeros((NN, pop_size), dtype=np.float32) 
         if key == 'Izh C': izh_params[key] = np.ones((NN, pop_size), dtype=np.float32) # емкости где нет связи - единицы
         for i in range(NN):
-            type = types_from_table[i]  # types_from_table !!!
+            type = types_from_table_4[i]  # types_from_table !!!
             neuron_param = neuron_types[neuron_types['Neuron Type'] == type]
 
             if not neuron_param.empty:
@@ -332,7 +364,7 @@ if __name__ == '__main__':
 
     ## synaptic variables
     syn_params = {
-        'g': np.zeros((NN+Ninps, NN, pop_size), dtype=np.float32) + net_params['gsyn_max'][:,:, np.newaxis], # 200.0,
+        'g': np.zeros((NN+Ninps, NN, pop_size), dtype=np.float32)+ net_params['gsyn_max'][:,:, np.newaxis], # 200.0,
         'tau_d': np.zeros((NN+Ninps, NN, pop_size), dtype=np.float32)+ net_params['tau_d'][:,:, np.newaxis], # 6.02,
         'tau_r': np.zeros((NN+Ninps, NN, pop_size), dtype=np.float32) + net_params['tau_r'][:,:, np.newaxis], # 359.8,
         'tau_f': np.zeros((NN+Ninps, NN, pop_size), dtype=np.float32) + net_params['tau_f'][:,:, np.newaxis], # 21.0,
@@ -350,14 +382,19 @@ if __name__ == '__main__':
     syn_params['e_r'] = (syn_params['e_r'] -1)*np.abs(izh_params['Izh Vr'])
 
 
+    print(syn_params)
+
+
 
     gen_params = {'mec': params_list['generator_params'][0],
-                  'lec': params_list['generator_params'][1]}
+                  'lec': params_list['generator_params'][1],
+                  'sup': params_list['generator_params'][2],
+                  'deep': params_list['generator_params'][3]}
 
 
     params = izh_params | gen_params | syn_params 
 
-    pprint(params)
+    # pprint(params)
 
     # Параметры готовы
 
@@ -365,7 +402,7 @@ if __name__ == '__main__':
 
 
     # Запуск
-    #'''
+    
 
     
     duration = 1200.0
@@ -375,18 +412,16 @@ if __name__ == '__main__':
 
     dt_mean = 0.01
     t_mean = np.arange(0, duration, dt_mean, dtype=np.float32)
-    
 
+
+    '''
+    
     firings_inputs = np.zeros(shape=(1, t.size, Ninps), dtype=np.float32)
-    mec_inputs, lec_inputs = generators_inputs(gen_params, t)
+    mec_inputs, lec_inputs, sup_pyr_inputs, deep_pyr_inputs = generators_inputs(gen_params, t)
     firings_inputs[:,:,0] = mec_inputs
     firings_inputs[:,:,1] = lec_inputs
-
-
-    # plt.plot(t, mec_inputs)
-    # plt.plot(t, lec_inputs)
-    # plt.show()
-
+    firings_inputs[:,:,2] = sup_pyr_inputs
+    firings_inputs[:,:,3] = deep_pyr_inputs
 
 
     model = HonestNetwork(params, dt_dim=dt_dim, use_input=True)
@@ -395,7 +430,7 @@ if __name__ == '__main__':
     # one_step = model.call(firings_inputs[:,0], init_states)
 
     
-    rates = model.predict0(firings_inputs) # , hist_states
+    # rates = model.predict0(firings_inputs, file4save=FILE_NAME) # , hist_states
 
     mean_rates = run_mean_field(params, duration, dt_mean, firings_inputs*1000)
 
@@ -411,9 +446,8 @@ if __name__ == '__main__':
         # Amean = f['Amean'][:,:]
 
         
-    from scipy.ndimage import gaussian_filter1d
 
-    for i in range(NN):
+    for i in range(NN+Ninps):
         if i < NN:
             type = types_from_table[i]
         else: type = 'generator'
@@ -433,8 +467,52 @@ if __name__ == '__main__':
         plt.xlabel("Время (мс)")
         plt.show()
 
+    '''
+
+    for freq in range(4, 13):
+
+        save_file=f'results/results_freq{freq}.h5'
+        
+        gen_params['mec']['ThetaFreq'] = freq
+        gen_params['lec']['ThetaFreq'] = freq
+        gen_params['sup']['ThetaFreq'] = freq
+        gen_params['deep']['ThetaFreq'] = freq
+
+        
+        params = izh_params | gen_params | syn_params 
+
+        firings_inputs = np.zeros(shape=(1, t.size, Ninps), dtype=np.float32)
+        mec_inputs, lec_inputs, sup_pyr_inputs, deep_pyr_inputs = generators_inputs(gen_params, t)
+        firings_inputs[:,:,0] = mec_inputs
+        firings_inputs[:,:,1] = lec_inputs
+        firings_inputs[:,:,2] = sup_pyr_inputs
+        firings_inputs[:,:,3] = deep_pyr_inputs
+
+        model = HonestNetwork(params, dt_dim=dt_dim, use_input=True)
+
+        rates = model.predict0(firings_inputs,file4save=save_file) # , hist_states
+
+        mean_rates = run_mean_field(params, duration, dt_mean, firings_inputs*1000)
 
 
-    # plt.show()
+        with h5py.File(save_file, 'r') as f:
+            num_steps = f['v'].shape[0]
+            num_groups = f['v'].shape[1]
+            num_neurons = f['v'].shape[2]
+            
+            #voltages = f['v'][:, :, :] #np.zeros((num_steps, num_groups, num_neurons))
+            rates = f['rate'][:,:]
+
+
+        firing_rate_honest = rates[:,0]
+        smoothed_rate = gaussian_filter1d(firing_rate_honest, sigma=220)
+        firing_rate_mean = mean_rates[:,0]
+
+        plt.plot(t, smoothed_rate, label='honest')
+        plt.plot(t_mean, firing_rate_mean, label='mean')
+        plt.legend() 
+        plt.title(f"{type}, Частота разрядов, Hz")
+        plt.xlabel("Время (мс)")
+        plt.show()
 
     # '''
